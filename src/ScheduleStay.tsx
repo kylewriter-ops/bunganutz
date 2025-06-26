@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { ROOMS, Stay, Bed, Room } from './models';
+import { Stay, ROOMS } from './models';
 import { supabase } from './supabaseClient';
 
 interface NewMember {
@@ -39,22 +39,9 @@ function getPeopleForDate(date: Date, stays: Stay[], allMembers: any[]) {
   return { members: realMembers, guests };
 }
 
-function getFirstScheduledDay(stays: Stay[]): Date {
-  const allDates = stays.flatMap((stay) => [new Date(stay.start_date)]);
-  return allDates.length > 0 ? allDates.sort((a, b) => a.getTime() - b.getTime())[0] : new Date();
-}
-
-function getRoomOpenBeds(room: Room, assigned: number) {
-  return room.beds.reduce((sum, bed) => sum + (bed.capacity || 1), 0) - assigned;
-}
-
 function getTotalBeds() {
   return ROOMS.reduce((sum, room) => sum + room.beds.reduce((s, bed) => s + (bed.capacity || 1), 0), 0);
 }
-
-const WEATHER_API_KEY = 'd484910d38d6372e2df05bac6186f79a';
-const WEATHER_LAT = 43.507855;
-const WEATHER_LON = -70.701264;
 
 function getDatesInRange(start: Date, end: Date) {
   const dates = [];
@@ -65,6 +52,10 @@ function getDatesInRange(start: Date, end: Date) {
   }
   return dates;
 }
+
+const WEATHER_API_KEY = 'd484910d38d6372e2df05bac6186f79a';
+const WEATHER_LAT = 43.507855;
+const WEATHER_LON = -70.701264;
 
 // WeatherWidget using 5-day/3-hour forecast
 const WeatherWidget: React.FC<{ start: Date | null; end: Date | null }> = ({ start, end }) => {
@@ -118,14 +109,14 @@ const WeatherWidget: React.FC<{ start: Date | null; end: Date | null }> = ({ sta
       forecastByDay[dateStr].push(item);
     });
     content = (
-      <ul style={{ margin: '8px 0 0 18px' }}>
+      <ul className="mt-2 ml-4 space-y-1">
         {dates.map((date: Date) => {
           const dateStr = date.toISOString().slice(0, 10);
           const dayForecasts = forecastByDay[dateStr];
           if (!dayForecasts) {
             return (
-              <li key={dateStr}>
-                <b>{date.toLocaleDateString()}:</b> <span>Too Far to Forecast</span>
+              <li key={dateStr} className="text-sm">
+                <span className="font-semibold">{date.toLocaleDateString()}:</span> <span className="text-gray-500">Too Far to Forecast</span>
               </li>
             );
           }
@@ -140,8 +131,8 @@ const WeatherWidget: React.FC<{ start: Date | null; end: Date | null }> = ({ sta
           });
           const summary = Object.entries(weatherCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
           return (
-            <li key={dateStr}>
-              <b>{date.toLocaleDateString()}:</b> {summary} {min}°F - {max}°F
+            <li key={dateStr} className="text-sm">
+              <span className="font-semibold">{date.toLocaleDateString()}:</span> {summary} {min}°F - {max}°F
             </li>
           );
         })}
@@ -150,9 +141,9 @@ const WeatherWidget: React.FC<{ start: Date | null; end: Date | null }> = ({ sta
   }
 
   return (
-    <div style={{ margin: '16px 0', padding: 12, background: '#e6f2ff', borderRadius: 8, minHeight: 60 }}>
-      <b>Weather Forecast at Bunganut:</b><br />
-      {content}
+    <div className="mt-4 p-4 bg-gradient-card rounded-lg border border-bunganut-coral/30">
+      <h4 className="text-heading-3 mb-2">Weather Forecast at Bunganut</h4>
+      <p className="text-body">{content}</p>
     </div>
   );
 };
@@ -268,32 +259,39 @@ const ScheduleStay: React.FC<ScheduleStayProps> = ({ stays, setStays, onAddStay,
   if (dateRange[0] && dateRange[1]) {
     const dates = getDatesInRange(dateRange[0], dateRange[1]);
     sidebar = (
-      <div style={{ marginTop: 16, background: '#f4f4f4', padding: 12, borderRadius: 8 }}>
-        <b>Attendance & Beds:</b>
-        <ul style={{ margin: '8px 0 0 18px' }}>
+      <div className="bg-gradient-card p-6 rounded-lg border border-bunganut-sage/30">
+        <h4 className="text-heading-3 mb-4">Attendance & Beds Summary</h4>
+        <div className="space-y-4">
           {dates.map(date => {
             const { members: realMembers, guests } = getPeopleForDate(date, stays, members);
             const allNames = [...realMembers.map((m: any) => m.first_name), ...guests.map((g: any) => g.first_name)];
             const totalBeds = getTotalBeds();
             const remainingBeds = totalBeds - (realMembers.length + guests.length);
             return (
-              <li key={date.toISOString()} style={{ marginBottom: 6 }}>
-                <b>{date.toLocaleDateString()}:</b><br />
-                In attendance: {allNames.length > 0 ? allNames.join(', ') : 'None'}; <br />
-                Remaining beds: {remainingBeds}
-              </li>
+              <div key={date.toISOString()} className="card">
+                <div className="text-heading-3 mb-2">{date.toLocaleDateString()}</div>
+                <div className="text-caption mb-1">
+                  <span className="font-medium">In attendance:</span> {allNames.length > 0 ? allNames.join(', ') : 'None'}
+                </div>
+                <div className="text-caption">
+                  <span className="font-medium">Remaining beds:</span> {remainingBeds}
+                </div>
+              </div>
             );
           })}
-        </ul>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', gap: 32 }}>
-      <form style={{ flex: 1 }} onSubmit={handleSubmit}>
-        <div style={{ marginBottom: 24 }}>
-          <label><strong>Arrival & Departure Dates:</strong></label><br />
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <form onSubmit={handleSubmit} className="card-spacing">
+        {/* Date Range Selection */}
+        <div>
+          <label className="block text-subheading mb-3">
+            Arrival & Departure Dates
+          </label>
           <DatePicker
             selectsRange
             startDate={dateRange[0]}
@@ -301,103 +299,123 @@ const ScheduleStay: React.FC<ScheduleStayProps> = ({ stays, setStays, onAddStay,
             onChange={update => setDateRange(update as [Date | null, Date | null])}
             isClearable
             placeholderText="Select a date range"
+            className="input-field"
           />
           <WeatherWidget start={dateRange[0]} end={dateRange[1]} />
         </div>
         
-        <div style={{ marginBottom: 24 }}>
-          <strong>Family Members Attending:</strong>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+        {/* Family Members */}
+        <div>
+          <label className="block text-subheading mb-3">
+            Family Members Attending
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {family.map((member: any) => (
-              <label key={member.id} style={{ minWidth: 120 }}>
+              <label key={member.id} className="interactive-card">
                 <input
                   type="checkbox"
                   checked={selectedMembers.includes(member.id)}
                   onChange={() => handleMemberChange(member.id)}
+                  className="checkbox-field mr-2"
                 />
-                {member.first_name}
+                <span className="text-body">{member.first_name}</span>
               </label>
             ))}
           </div>
         </div>
 
-        <div style={{ marginBottom: 24 }}>
-          <strong>Guests Attending:</strong>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+        {/* Guests */}
+        <div>
+          <label className="block text-subheading mb-3">
+            Guests Attending
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
             {guests.map((guest: any) => (
-              <label key={guest.id} style={{ minWidth: 120 }}>
+              <label key={guest.id} className="interactive-card">
                 <input
                   type="checkbox"
                   checked={selectedMembers.includes(guest.id)}
                   onChange={() => handleMemberChange(guest.id)}
+                  className="checkbox-field mr-2"
                 />
-                {guest.first_name} {guest.family_name}
+                <span className="text-body">{guest.first_name} {guest.family_name}</span>
               </label>
             ))}
           </div>
           <button 
             type="button" 
             onClick={() => setShowNewMemberForm(true)}
-            style={{ marginTop: 8, padding: '4px 12px', fontSize: 12 }}
+            className="btn-outline btn-small"
           >
             + Add New Guest
           </button>
         </div>
 
+        {/* Add New Guest Form */}
         {showNewMemberForm && (
-          <div style={{ marginBottom: 24, padding: 16, border: '1px solid #ccc', borderRadius: 8, background: '#f9f9f9' }}>
-            <strong>Add New Guest:</strong>
-            <div style={{ marginTop: 8 }}>
-              <div style={{ marginBottom: 8 }}>
-                <label>
-                  First Name: *
-                  <input
-                    type="text"
-                    value={newMember.first_name}
-                    onChange={e => setNewMember(prev => ({ ...prev, first_name: e.target.value }))}
-                    required
-                    style={{ marginLeft: 8, width: 150 }}
-                  />
+          <div className="bg-gradient-card p-6 rounded-lg border border-bunganut-coral/30">
+            <h4 className="text-heading-3 mb-4">Add New Guest</h4>
+            <div className="card-spacing">
+              <div>
+                <label className="block text-caption font-medium mb-1">
+                  First Name *
                 </label>
+                <input
+                  type="text"
+                  value={newMember.first_name}
+                  onChange={e => setNewMember(prev => ({ ...prev, first_name: e.target.value }))}
+                  required
+                  className="input-field"
+                />
               </div>
-              <div style={{ marginBottom: 8 }}>
-                <label>
-                  Family Name:
-                  <input
-                    type="text"
-                    value={newMember.family_name}
-                    onChange={e => setNewMember(prev => ({ ...prev, family_name: e.target.value }))}
-                    style={{ marginLeft: 8, width: 150 }}
-                  />
+              <div>
+                <label className="block text-caption font-medium mb-1">
+                  Family Name
                 </label>
+                <input
+                  type="text"
+                  value={newMember.family_name}
+                  onChange={e => setNewMember(prev => ({ ...prev, family_name: e.target.value }))}
+                  className="input-field"
+                />
               </div>
-              <div style={{ marginBottom: 8 }}>
-                <label>
-                  Food Preferences:
-                  <input
-                    type="text"
-                    value={newMember.food_preferences}
-                    onChange={e => setNewMember(prev => ({ ...prev, food_preferences: e.target.value }))}
-                    placeholder="e.g., vegetarian, no seafood"
-                    style={{ marginLeft: 8, width: 200 }}
-                  />
+              <div>
+                <label className="block text-caption font-medium mb-1">
+                  Food Preferences
                 </label>
+                <input
+                  type="text"
+                  value={newMember.food_preferences}
+                  onChange={e => setNewMember(prev => ({ ...prev, food_preferences: e.target.value }))}
+                  placeholder="e.g., vegetarian, no seafood"
+                  className="input-field"
+                />
               </div>
-              <div style={{ marginBottom: 12 }}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={newMember.is_guest}
-                    onChange={e => setNewMember(prev => ({ ...prev, is_guest: e.target.checked }))}
-                  />
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={newMember.is_guest}
+                  onChange={e => setNewMember(prev => ({ ...prev, is_guest: e.target.checked }))}
+                  className="checkbox-field"
+                />
+                <label className="text-caption">
                   This is a guest (not a family member)
                 </label>
               </div>
-              <div>
-                <button type="button" onClick={handleAddMember} disabled={addingMember} style={{ marginRight: 8 }}>
+              <div className="flex space-x-3">
+                <button 
+                  type="button" 
+                  onClick={handleAddMember} 
+                  disabled={addingMember}
+                  className="btn-primary btn-small flex-1"
+                >
                   {addingMember ? 'Adding...' : 'Add Guest'}
                 </button>
-                <button type="button" onClick={() => setShowNewMemberForm(false)}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowNewMemberForm(false)}
+                  className="btn-outline btn-small flex-1"
+                >
                   Cancel
                 </button>
               </div>
@@ -405,24 +423,33 @@ const ScheduleStay: React.FC<ScheduleStayProps> = ({ stays, setStays, onAddStay,
           </div>
         )}
 
-        <div style={{ marginBottom: 24 }}>
-          <strong>Food Preferences:</strong>
-          <div style={{ marginTop: 8 }}>
-            {selectedMembers.length === 0 && <em>No members selected.</em>}
+        {/* Food Preferences */}
+        <div>
+          <label className="block text-subheading mb-3">
+            Food Preferences
+          </label>
+          <div className="space-y-3">
+            {selectedMembers.length === 0 && (
+              <p className="text-caption italic">No members selected.</p>
+            )}
             {selectedMembers.map(id => {
               const member = members.find((m: any) => m.id === id);
               return member ? (
-                <div key={id} style={{ marginBottom: 10, display: 'flex', alignItems: 'center' }}>
-                  <span style={{ width: 120 }}>{member.first_name}:</span>
+                <div key={id} className="flex items-center space-x-3">
+                  <span className="w-24 font-medium text-caption">{member.first_name}:</span>
                   <input
                     type="text"
                     value={memberPrefs[id] || member.food_preferences || ''}
                     onChange={e => handlePrefChange(id, e.target.value)}
                     placeholder="e.g., vegetarian, no seafood"
-                    style={{ marginRight: 8, flex: 1 }}
+                    className="input-field flex-1"
                   />
                   {memberPrefs[id] && (
-                    <button type="button" onClick={() => handleRemovePref(id)} style={{ marginLeft: 4 }}>
+                    <button 
+                      type="button" 
+                      onClick={() => handleRemovePref(id)}
+                      className="text-red-500 hover:text-red-700 text-caption font-medium"
+                    >
                       Remove
                     </button>
                   )}
@@ -431,16 +458,22 @@ const ScheduleStay: React.FC<ScheduleStayProps> = ({ stays, setStays, onAddStay,
             })}
           </div>
         </div>
-        <button type="submit" style={{ marginTop: 16, padding: '8px 20px', fontWeight: 600 }}>
-          {editingStay ? 'Update Stay' : 'Schedule Stay'}
-        </button>
-        {editingStay && onCancelEdit && (
-          <button type="button" onClick={onCancelEdit} style={{ marginLeft: 12, marginTop: 16 }}>
-            Cancel
+
+        {/* Submit Buttons */}
+        <div className="flex space-x-4 pt-4">
+          <button type="submit" className="btn-primary">
+            {editingStay ? 'Update Stay' : 'Schedule Stay'}
           </button>
-        )}
+          {editingStay && onCancelEdit && (
+            <button type="button" onClick={onCancelEdit} className="btn-outline">
+              Cancel
+            </button>
+          )}
+        </div>
       </form>
-      {sidebar && <div style={{ flex: 1, minWidth: 260 }}>{sidebar}</div>}
+      
+      {/* Sidebar */}
+      {sidebar && <div className="lg:col-span-1">{sidebar}</div>}
     </div>
   );
 };

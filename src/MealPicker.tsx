@@ -211,32 +211,49 @@ const MealPicker: React.FC<MealPickerProps> = ({ selectedDate, stays, members })
     saveAssignment(meal, assignments[meal]?.cook || 'available', menu);
   }
 
-  return (
-    <div>
-      <div style={{ marginBottom: 8 }}>
-        <b>Date:</b> {selectedDate.toLocaleDateString()}
+  if (people.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-caption italic">No one scheduled for this date.</p>
       </div>
-      <div style={{ marginBottom: 16 }}>
-        <b>Total People in Attendance:</b> {people.length}
+    );
+  }
+
+  return (
+    <div className="section-spacing">
+      {/* Header Info */}
+      <div className="card">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
+          <div>
+            <div className="text-heading-2">{selectedDate.toLocaleDateString()}</div>
+            <div className="text-caption">Selected Date</div>
+          </div>
+          <div>
+            <div className="text-heading-2 text-bunganut-sage">{people.length}</div>
+            <div className="text-caption">Total People in Attendance</div>
+          </div>
+        </div>
       </div>
       
       {/* Day Guests Section */}
-      <div style={{ marginBottom: 16, padding: 12, background: '#f0f8ff', borderRadius: 6 }}>
-        <b>Day Guests (Meals Only):</b>
-        <div style={{ marginTop: 8 }}>
+      <div className="bg-gradient-card p-6 rounded-lg border border-bunganut-coral/30">
+        <h3 className="text-heading-3 mb-4">Day Guests (Meals Only)</h3>
+        <div className="space-y-4">
           {mealAttendance
             .filter(att => att.date === dateStr)
             .map(att => {
               const guest = members.find(m => m.id === att.member_id);
               return guest ? (
-                <div key={att.id} style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ marginRight: 8 }}>
-                    {guest.first_name} {guest.family_name}
-                    {guest.food_preferences && ` (${guest.food_preferences})`}
-                  </span>
+                <div key={att.id} className="flex items-center justify-between card">
+                  <div>
+                    <span className="font-medium text-body">{guest.first_name} {guest.family_name}</span>
+                    {guest.food_preferences && (
+                      <span className="ml-2 text-caption">({guest.food_preferences})</span>
+                    )}
+                  </div>
                   <button 
                     onClick={() => removeGuestFromMeal(guest.id)}
-                    style={{ padding: '2px 6px', fontSize: 10, background: '#ff6b6b', color: 'white', border: 'none', borderRadius: 3 }}
+                    className="bg-red-500 hover:bg-red-600 text-white text-caption font-medium py-1 px-3 rounded-lg transition-colors"
                   >
                     Remove
                   </button>
@@ -244,93 +261,134 @@ const MealPicker: React.FC<MealPickerProps> = ({ selectedDate, stays, members })
               ) : null;
             })}
           {mealAttendance.filter(att => att.date === dateStr).length === 0 && (
-            <em>No day guests added</em>
+            <p className="text-caption italic text-center py-4">No day guests added</p>
+          )}
+          
+          {/* Add Day Guest */}
+          {!showAddGuest ? (
+            <button 
+              onClick={() => setShowAddGuest(true)}
+              className="btn-outline w-full"
+            >
+              + Add Day Guest
+            </button>
+          ) : (
+            <div className="card space-y-3">
+              <select 
+                value={selectedGuestId} 
+                onChange={e => setSelectedGuestId(e.target.value)}
+                className="select-field"
+              >
+                <option value="">Select a guest...</option>
+                {availableGuests.map(guest => (
+                  <option key={guest.id} value={guest.id}>
+                    {guest.first_name} {guest.family_name}
+                  </option>
+                ))}
+              </select>
+              <div className="flex space-x-3">
+                <button 
+                  onClick={addGuestToMeal}
+                  disabled={!selectedGuestId}
+                  className="btn-primary flex-1"
+                >
+                  Add Guest
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowAddGuest(false);
+                    setSelectedGuestId('');
+                  }}
+                  className="btn-outline flex-1"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           )}
         </div>
-        
-        {/* Add Day Guest */}
-        {!showAddGuest ? (
-          <button 
-            onClick={() => setShowAddGuest(true)}
-            style={{ marginTop: 8, padding: '4px 12px', fontSize: 12 }}
-          >
-            + Add Day Guest
-          </button>
-        ) : (
-          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <select 
-              value={selectedGuestId} 
-              onChange={e => setSelectedGuestId(e.target.value)}
-              style={{ flex: 1 }}
-            >
-              <option value="">Select a guest...</option>
-              {availableGuests.map(guest => (
-                <option key={guest.id} value={guest.id}>
-                  {guest.first_name} {guest.family_name}
-                </option>
-              ))}
-            </select>
-            <button 
-              onClick={addGuestToMeal}
-              disabled={!selectedGuestId}
-              style={{ padding: '4px 8px', fontSize: 12 }}
-            >
-              Add
-            </button>
-            <button 
-              onClick={() => {
-                setShowAddGuest(false);
-                setSelectedGuestId('');
-              }}
-              style={{ padding: '4px 8px', fontSize: 12 }}
-            >
-              Cancel
-            </button>
-          </div>
-        )}
       </div>
 
+      {/* Food Preferences */}
       {preferences.length > 0 && (
-        <div style={{ marginBottom: 16, background: '#f8f8e8', padding: 10, borderRadius: 6 }}>
-          <b>Food Preferences for this date:</b> {preferences.join(', ')}
+        <div className="bg-gradient-card p-6 rounded-lg border border-bunganut-sage/30">
+          <h3 className="text-heading-3 mb-3">Food Preferences</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+            {preferences.map((pref, index) => (
+              <span key={index} className="status-badge status-badge-info">
+                {pref}
+              </span>
+            ))}
+          </div>
         </div>
       )}
       
-      <div>
-        {MEAL_TYPES.map((meal) => (
-          <div key={meal} style={{ marginBottom: 20, display: 'flex', alignItems: 'center' }}>
-            <span style={{ width: 120, fontWeight: 600, textTransform: 'capitalize' }}>{meal}:</span>
-            <select
-              value={assignments[meal]?.cook || 'available'}
-              onChange={e => handleAssignCook(meal, e.target.value)}
-              style={{ marginRight: 12 }}
-              disabled={loading}
-            >
-              <option value="available">Available</option>
-              <option value="on-your-own">On Your Own</option>
-              {people.map(person => (
-                <option key={person.id} value={person.id}>{person.first_name || person.name}</option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="Menu details (optional)"
-              value={assignments[meal]?.menu || ''}
-              onChange={e => handleMenuChange(meal, e.target.value)}
-              style={{ marginRight: 12, flex: 1 }}
-              disabled={loading}
-            />
-            <span style={{ color: '#555' }}>
-              {assignments[meal]?.cook && assignments[meal]?.cook !== 'available' && assignments[meal]?.cook !== 'on-your-own'
-                ? people.find(p => p.id === assignments[meal]?.cook)?.first_name || people.find(p => p.id === assignments[meal]?.cook)?.name
-                : assignments[meal]?.cook === 'on-your-own'
-                  ? 'On Your Own'
-                  : 'No one assigned'}
-            </span>
-          </div>
-        ))}
+      {/* Meal Assignments */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {MEAL_TYPES.map((meal) => {
+          const assignment = assignments[meal];
+          const cookName = assignment?.cook && assignment.cook !== 'available' && assignment.cook !== 'on-your-own'
+            ? people.find(p => p.id === assignment.cook)?.first_name || people.find(p => p.id === assignment.cook)?.name
+            : assignment?.cook === 'on-your-own'
+              ? 'On Your Own'
+              : 'No one assigned';
+          
+          return (
+            <div key={meal} className="card-hover">
+              <h3 className="text-heading-3 mb-4 capitalize">{meal}</h3>
+              
+              <div className="card-spacing">
+                {/* Cook Assignment */}
+                <div>
+                  <label className="block text-caption font-medium mb-2">Cook</label>
+                  <select
+                    value={assignment?.cook || 'available'}
+                    onChange={e => handleAssignCook(meal, e.target.value)}
+                    className="select-field"
+                    disabled={loading}
+                  >
+                    <option value="available">Available</option>
+                    <option value="on-your-own">On Your Own</option>
+                    {people.map(person => (
+                      <option key={person.id} value={person.id}>{person.first_name || person.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Menu Details */}
+                <div>
+                  <label className="block text-caption font-medium mb-2">Menu Details (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="What's on the menu?"
+                    value={assignment?.menu || ''}
+                    onChange={e => handleMenuChange(meal, e.target.value)}
+                    className="input-field"
+                    disabled={loading}
+                  />
+                </div>
+
+                {/* Status Display */}
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="text-caption mb-1">Current Assignment:</div>
+                  <div className="font-medium text-body">{cookName}</div>
+                  {assignment?.menu && (
+                    <div className="text-caption mt-1">
+                      <span className="font-medium">Menu:</span> {assignment.menu}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
-      {error && <div style={{ color: 'red' }}>{error}</div>}
+      
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
     </div>
   );
 };

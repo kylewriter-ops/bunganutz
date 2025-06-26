@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **BedPicker dropdown selection**: Fixed critical issue preventing users from selecting names in bed assignment dropdowns
+- **Database schema mismatch**: Corrected BedPicker to use actual database schema with `room_name`, `bed_name`, and `member_id` fields
+- **Bunk Room bed handling**: Fixed issue where multiple bunk beds weren't being treated as separate beds
+- **Key format conflicts**: Resolved parsing issues with bed IDs containing hyphens by using pipe separator
+- **Assignment persistence**: Ensured bed assignments properly save to and load from database
+
+### Technical
+- Updated BedPicker to match actual `bed_assignments` table schema
+- Fixed key format from `${bed.id}-${i}` to `${bed.id}|${i}` to avoid conflicts with hyphenated bed IDs
+- Improved error handling and debugging for database operations
+- Enhanced name display logic to properly show first and family names
+
 ### Added
 - Meal attendance tracking for day guests
 - Comprehensive database schema with SQL setup scripts
@@ -18,10 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced README with detailed setup instructions
 - Improved .gitignore with additional exclusions
 
-### Fixed
-- TypeScript compilation error with Set spread operator
-
-## [1.0.0] - 2024-01-XX
+## [0.0.3] - 2025-06-25
 
 ### Added
 - Initial release of Bunganutz cottage planning app
