@@ -120,7 +120,7 @@ function App() {
     };
 
     return (
-      <div className="fixed left-4 top-1/2 transform -translate-y-1/2 z-50">
+      <div className="hidden md:block fixed left-4 top-1/2 transform -translate-y-1/2 z-50">
         <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 p-4">
           <nav className="space-y-3">
             <button
