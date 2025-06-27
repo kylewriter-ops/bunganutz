@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/bunganutz/static/css/main.349965b0.css",
+    "main.js": "/bunganutz/static/js/main.7d40a3f6.js",
+    "static/js/453.8b212fe7.chunk.js": "/bunganutz/static/js/453.8b212fe7.chunk.js",
+    "index.html": "/bunganutz/index.html",
+    "main.349965b0.css.map": "/bunganutz/static/css/main.349965b0.css.map",
+    "main.7d40a3f6.js.map": "/bunganutz/static/js/main.7d40a3f6.js.map",
+    "453.8b212fe7.chunk.js.map": "/bunganutz/static/js/453.8b212fe7.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.349965b0.css",
+    "static/js/main.7d40a3f6.js"
+  ]
+}
