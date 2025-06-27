@@ -67,10 +67,10 @@ const CottageCalendar: React.FC<CottageCalendarProps> = ({ selectedDate, onDateC
         />
       </div>
 
-      {/* Who's at the cottage section with better layout */}
+      {/* Who's at the camp section with better layout */}
       <div className="bg-gradient-card p-6 rounded-lg border border-bunganut-sage/30">
         <h3 className="text-heading-3 mb-4">
-          Who's at the cottage on {selectedDate.toLocaleDateString()}?
+          Who's at the camp on {selectedDate.toLocaleDateString()}?
         </h3>
         <div className="space-y-4">
           {(() => {
