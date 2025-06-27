@@ -22,6 +22,8 @@ CREATE TABLE stays (
   guests JSONB DEFAULT '[]'::jsonb,
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
+  arrival_meals JSONB DEFAULT '["breakfast", "lunch", "dinner"]'::jsonb,
+  departure_meals JSONB DEFAULT '["breakfast", "lunch", "dinner"]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

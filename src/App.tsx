@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ScheduleStay from './ScheduleStay';
 import CottageCalendar from './CottageCalendar';
 import BedPicker from './BedPicker';
@@ -13,6 +13,8 @@ export interface Stay {
   guests: { type: string; quantity: number }[];
   start_date: string;
   end_date: string;
+  arrival_meals?: string[];
+  departure_meals?: string[];
   created_at?: string;
 }
 
@@ -26,6 +28,7 @@ function App() {
   const [members, setMembers] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(getFirstScheduledDay([]));
   const [stayBeingEdited, setStayBeingEdited] = useState<Stay | null>(null);
+  const scheduleStayRef = useRef<HTMLElement>(null);
 
   // Fetch stays from Supabase on mount
   useEffect(() => {
@@ -83,6 +86,8 @@ function App() {
         guests: updatedStay.guests,
         start_date: updatedStay.start_date,
         end_date: updatedStay.end_date,
+        arrival_meals: updatedStay.arrival_meals,
+        departure_meals: updatedStay.departure_meals,
       })
       .eq('id', updatedStay.id)
       .select();
@@ -94,6 +99,59 @@ function App() {
       alert('Error updating stay: ' + error.message);
     }
   }
+
+  // Function to handle editing a stay and scroll to the Schedule a Stay section
+  const handleEditStay = (stay: Stay) => {
+    setStayBeingEdited(stay);
+    // Scroll to the Schedule a Stay section with smooth animation
+    scheduleStayRef.current?.scrollIntoView({ 
+      behavior: 'smooth',
+      block: 'start'
+    });
+  };
+
+  // Navigation component
+  const Navigation = () => {
+    const scrollToSection = (sectionId: string) => {
+      const element = document.getElementById(sectionId);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    };
+
+    return (
+      <div className="fixed left-4 top-1/2 transform -translate-y-1/2 z-50">
+        <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 p-4">
+          <nav className="space-y-3">
+            <button
+              onClick={() => scrollToSection('calendar-section')}
+              className="block text-left text-sm font-medium text-gray-700 hover:text-bunganut-burgundy transition-colors"
+            >
+              Calendar
+            </button>
+            <button
+              onClick={() => scrollToSection('reservations-section')}
+              className="block text-left text-sm font-medium text-gray-700 hover:text-bunganut-burgundy transition-colors"
+            >
+              Reservations
+            </button>
+            <button
+              onClick={() => scrollToSection('bed-picker-section')}
+              className="block text-left text-sm font-medium text-gray-700 hover:text-bunganut-burgundy transition-colors"
+            >
+              Bed Picker
+            </button>
+            <button
+              onClick={() => scrollToSection('meal-assignments-section')}
+              className="block text-left text-sm font-medium text-gray-700 hover:text-bunganut-burgundy transition-colors"
+            >
+              Meal Assignments
+            </button>
+          </nav>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-cottage">
@@ -109,14 +167,31 @@ function App() {
             Welcome, Bunganutz!
           </h1>
           <p className="text-subheading max-w-2xl mx-auto">
-            Plan your stay, pick your bed, and sign up for meals at our cozy cottage retreat
+            Plan your stay, pick your bed, and sign up for meals at our family's camp.
           </p>
         </header>
 
         {/* Main Content with Proper Spacing */}
         <main className="section-spacing">
+          {/* Calendar View Section */}
+          <section id="calendar-section" className="card-elevated">
+            <div className="mb-8">
+              <h2 className="text-heading-2 mb-2">
+                Who's at the camp?
+              </h2>
+              <p className="text-subheading">Calendar view of all scheduled stays</p>
+            </div>
+            <CottageCalendar
+              selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
+              stays={stays}
+              onEditStay={handleEditStay}
+              members={members}
+            />
+          </section>
+
           {/* Schedule a Stay Section */}
-          <section className="card-elevated">
+          <section id="reservations-section" ref={scheduleStayRef} className="card-elevated">
             <div className="mb-8">
               <h2 className="text-heading-2 mb-2">Schedule a Stay</h2>
               <p className="text-subheading">Plan your arrival and departure dates</p>
@@ -133,49 +208,43 @@ function App() {
             />
           </section>
 
-          {/* Calendar View Section */}
-          <section className="card-elevated">
-            <div className="mb-8">
-              <h2 className="text-heading-2 mb-2">
-                Who's at the cottage?
-              </h2>
-              <p className="text-subheading">Calendar view of all scheduled stays</p>
-            </div>
-            <CottageCalendar
-              selectedDate={selectedDate}
-              onDateChange={setSelectedDate}
-              stays={stays}
-              onEditStay={setStayBeingEdited}
-              members={members}
-            />
-          </section>
-
           {/* Bed Picker Section */}
-          <section className="card-elevated">
+          <section id="bed-picker-section" className="card-elevated">
             <div className="mb-8">
               <h2 className="text-heading-2 mb-2">Bed Picker</h2>
               <p className="text-subheading">Assign beds to family members and guests</p>
             </div>
-            <BedPicker selectedDate={selectedDate} stays={stays} members={members} />
+            <BedPicker 
+              selectedDate={selectedDate} 
+              stays={stays} 
+              members={members} 
+              onDateChange={setSelectedDate}
+            />
           </section>
 
           {/* Meal Signup Section */}
-          <section className="card-elevated">
+          <section id="meal-assignments-section" className="card-elevated">
             <div className="mb-8">
               <h2 className="text-heading-2 mb-2">Meal Signup</h2>
               <p className="text-subheading">Plan and assign cooking responsibilities</p>
             </div>
-            <MealPicker selectedDate={selectedDate} stays={stays} members={members} />
+            <MealPicker 
+              selectedDate={selectedDate} 
+              stays={stays} 
+              members={members} 
+              onDateChange={setSelectedDate}
+            />
           </section>
         </main>
 
         {/* Footer */}
         <footer className="text-center mt-20 pt-8 border-t border-gray-200">
           <p className="text-caption">
-            © 2024 Bunganut Cottage. Made with ❤️ for family and friends.
+            © 2025 Kyle Callahan. Made with ❤️ for family and friends.
           </p>
         </footer>
       </div>
+      <Navigation />
     </div>
   );
 }

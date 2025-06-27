@@ -40,14 +40,18 @@ const CottageCalendar: React.FC<CottageCalendarProps> = ({ selectedDate, onDateC
           value={selectedDate}
           onChange={(val) => onDateChange(val as Date)}
           className="w-full border-0"
+          calendarType="gregory"
           tileContent={({ date, view }) => {
             if (view !== 'month') return null;
             const { members: realMembers, guests } = getPeopleForDate(date, stays, members);
             const total = realMembers.length + guests.length;
-            if (total === 0) return null;
             return (
               <div className="flex flex-col items-center justify-center h-full">
-                <div className="w-6 h-6 bg-bunganut-burgundy text-white text-xs font-bold rounded-full flex items-center justify-center mt-1">
+                <div className={`w-6 h-6 text-xs font-bold rounded-full flex items-center justify-center mt-1 ${
+                  total > 0 
+                    ? 'bg-bunganut-burgundy text-white' 
+                    : 'bg-gray-100 text-gray-400'
+                }`}>
                   {total}
                 </div>
               </div>
@@ -87,17 +91,11 @@ const CottageCalendar: React.FC<CottageCalendarProps> = ({ selectedDate, onDateC
                   const guestNames = members
                     .filter((m: any) => stay.member_ids.includes(m.id) && m.is_guest)
                     .map((m: any) => m.first_name);
-                  const organizer = members.find((m: any) => m.id === stay.organizer_id);
                   
                   return (
                     <div key={stay.id} className="card">
                       <div className="flex justify-between items-start">
                         <div className="space-y-3">
-                          <div>
-                            <span className="text-subheading font-medium">Organizer:</span>
-                            <span className="ml-2 text-body">{organizer?.first_name || 'Unknown'}</span>
-                          </div>
-                          
                           {memberNames.length > 0 && (
                             <div>
                               <span className="text-subheading font-medium">Family Members:</span>

@@ -6,9 +6,10 @@ export type RoomName =
   | "Porch"
   | "Loft"
   | "Tent Stand"
-  | "Main Room";
+  | "Main Room"
+  | "Yard";
 
-export type BedType = 'queen' | 'single' | 'double' | 'bunk-single' | 'bunk-double' | 'mattress' | 'tent';
+export type BedType = 'queen' | 'single' | 'double' | 'bunk-single' | 'bunk-double' | 'mattress' | 'tent' | 'personal-tent';
 
 export interface Bed {
   id: string;
@@ -71,9 +72,14 @@ export const ROOMS: Room[] = [
   {
     name: 'Tent Stand',
     beds: [
-      { id: 'tent-stand', description: 'Tent stand (bring your own tent, up to 4 people)', type: 'tent', room: 'Tent Stand', capacity: 4 },
+      { id: 'tent-stand', description: 'Tent stand (up to 4 people)', type: 'tent', room: 'Tent Stand', capacity: 4 },
     ],
     description: "Capable of holding a four person tent",
+  },
+  {
+    name: 'Yard',
+    beds: [], // Will be populated dynamically
+    description: "Personal tents and campers in the yard",
   },
 ];
 
@@ -94,6 +100,8 @@ export interface Stay {
   guests: { type: string; quantity: number }[];
   start_date: string;
   end_date: string;
+  arrival_meals?: string[];
+  departure_meals?: string[];
   created_at?: string;
 }
 

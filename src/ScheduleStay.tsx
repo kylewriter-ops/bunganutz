@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { Stay, ROOMS } from './models';
+import { Stay, ROOMS, MEAL_TYPES } from './models';
 import { supabase } from './supabaseClient';
 
 interface NewMember {
@@ -152,6 +152,10 @@ const ScheduleStay: React.FC<ScheduleStayProps> = ({ stays, setStays, onAddStay,
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [memberPrefs, setMemberPrefs] = useState<MemberPrefs>({});
+  const [arrivalMeals, setArrivalMeals] = useState<string[]>(['breakfast', 'lunch', 'dinner']);
+  const [departureMeals, setDepartureMeals] = useState<string[]>(['breakfast', 'lunch', 'dinner']);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [newMember, setNewMember] = useState<NewMember>({
     first_name: '',
     family_name: '',
@@ -171,13 +175,32 @@ const ScheduleStay: React.FC<ScheduleStayProps> = ({ stays, setStays, onAddStay,
         new Date(editingStay.end_date),
       ]);
       setSelectedMembers(editingStay.member_ids);
+      setArrivalMeals(editingStay.arrival_meals || ['breakfast', 'lunch', 'dinner']);
+      setDepartureMeals(editingStay.departure_meals || ['breakfast', 'lunch', 'dinner']);
       // Optionally, load food prefs if you persist them
     } else {
       setDateRange([null, null]);
       setSelectedMembers([]);
       setMemberPrefs({});
+      setArrivalMeals(['breakfast', 'lunch', 'dinner']);
+      setDepartureMeals(['breakfast', 'lunch', 'dinner']);
+      setSearchQuery('');
+      setShowSearchResults(false);
     }
   }, [editingStay]);
+
+  // Close search results when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Element;
+      if (!target.closest('.search-container')) {
+        setShowSearchResults(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   function handleMemberChange(id: string) {
     setSelectedMembers(prev =>
@@ -195,6 +218,58 @@ const ScheduleStay: React.FC<ScheduleStayProps> = ({ stays, setStays, onAddStay,
       delete newPrefs[id];
       return newPrefs;
     });
+  }
+
+  function handleMealToggle(mealType: string, mealArray: string[], setMealArray: React.Dispatch<React.SetStateAction<string[]>>) {
+    setMealArray(prev => 
+      prev.includes(mealType) 
+        ? prev.filter(m => m !== mealType)
+        : [...prev, mealType]
+    );
+  }
+
+  // Search functionality
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    
+    const query = searchQuery.toLowerCase();
+    const allMembers = [...family, ...guests];
+    
+    // Filter members that match the search query and aren't already selected
+    return allMembers.filter(member => {
+      const fullName = `${member.first_name} ${member.family_name || ''}`.toLowerCase();
+      const firstName = member.first_name.toLowerCase();
+      const lastName = member.family_name?.toLowerCase() || '';
+      
+      return (fullName.includes(query) || firstName.includes(query) || lastName.includes(query)) &&
+             !selectedMembers.includes(member.id);
+    });
+  }, [searchQuery, family, guests, selectedMembers]);
+
+  function handleAddMemberFromSearch(memberId: string) {
+    setSelectedMembers(prev => [...prev, memberId]);
+    setSearchQuery('');
+    setShowSearchResults(false);
+  }
+
+  function handleRemoveMember(memberId: string) {
+    setSelectedMembers(prev => prev.filter(id => id !== memberId));
+  }
+
+  function handleQuickAddGuest() {
+    const names = searchQuery.trim().split(' ');
+    const firstName = names[0] || '';
+    const lastName = names.slice(1).join(' ') || '';
+    
+    setNewMember({
+      first_name: firstName,
+      family_name: lastName,
+      food_preferences: '',
+      is_guest: true
+    });
+    setShowNewMemberForm(true);
+    setSearchQuery('');
+    setShowSearchResults(false);
   }
 
   async function handleAddMember() {
@@ -243,6 +318,8 @@ const ScheduleStay: React.FC<ScheduleStayProps> = ({ stays, setStays, onAddStay,
       guests: [], // No more guest counts, all guests are now members
       start_date: dateRange[0].toISOString().slice(0, 10),
       end_date: dateRange[1].toISOString().slice(0, 10),
+      arrival_meals: arrivalMeals,
+      departure_meals: departureMeals,
     };
     if (editingStay && onUpdateStay) {
       await onUpdateStay({ ...editingStay, ...stayData });
@@ -252,6 +329,8 @@ const ScheduleStay: React.FC<ScheduleStayProps> = ({ stays, setStays, onAddStay,
     setDateRange([null, null]);
     setSelectedMembers([]);
     setMemberPrefs({});
+    setArrivalMeals(['breakfast', 'lunch', 'dinner']);
+    setDepartureMeals(['breakfast', 'lunch', 'dinner']);
   }
 
   // Sidebar summary for each date in range (use stays prop)
@@ -303,52 +382,143 @@ const ScheduleStay: React.FC<ScheduleStayProps> = ({ stays, setStays, onAddStay,
           />
           <WeatherWidget start={dateRange[0]} end={dateRange[1]} />
         </div>
-        
-        {/* Family Members */}
-        <div>
-          <label className="block text-subheading mb-3">
-            Family Members Attending
-          </label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {family.map((member: any) => (
-              <label key={member.id} className="interactive-card">
-                <input
-                  type="checkbox"
-                  checked={selectedMembers.includes(member.id)}
-                  onChange={() => handleMemberChange(member.id)}
-                  className="checkbox-field mr-2"
-                />
-                <span className="text-body">{member.first_name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
 
-        {/* Guests */}
+        {/* Meal Attendance */}
+        {dateRange[0] && dateRange[1] && (
+          <div className="space-y-6">
+            {/* Arrival Day Meals */}
+            <div>
+              <label className="block text-subheading mb-3">
+                Meals on Arrival Day ({dateRange[0]?.toLocaleDateString()})
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                {MEAL_TYPES.map(mealType => (
+                  <label key={mealType} className="interactive-card">
+                    <input
+                      type="checkbox"
+                      checked={arrivalMeals.includes(mealType)}
+                      onChange={() => handleMealToggle(mealType, arrivalMeals, setArrivalMeals)}
+                      className="checkbox-field mr-2"
+                    />
+                    <span className="text-body capitalize">{mealType}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Departure Day Meals */}
+            <div>
+              <label className="block text-subheading mb-3">
+                Meals on Departure Day ({dateRange[1]?.toLocaleDateString()})
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                {MEAL_TYPES.map(mealType => (
+                  <label key={mealType} className="interactive-card">
+                    <input
+                      type="checkbox"
+                      checked={departureMeals.includes(mealType)}
+                      onChange={() => handleMealToggle(mealType, departureMeals, setDepartureMeals)}
+                      className="checkbox-field mr-2"
+                    />
+                    <span className="text-body capitalize">{mealType}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* People Selection */}
         <div>
           <label className="block text-subheading mb-3">
-            Guests Attending
+            People Attending
           </label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
-            {guests.map((guest: any) => (
-              <label key={guest.id} className="interactive-card">
-                <input
-                  type="checkbox"
-                  checked={selectedMembers.includes(guest.id)}
-                  onChange={() => handleMemberChange(guest.id)}
-                  className="checkbox-field mr-2"
-                />
-                <span className="text-body">{guest.first_name} {guest.family_name}</span>
-              </label>
-            ))}
+          
+          {/* Selected People Display */}
+          {selectedMembers.length > 0 && (
+            <div className="mb-4">
+              <div className="text-caption font-medium mb-2">Selected People:</div>
+              <div className="flex flex-wrap gap-2">
+                {selectedMembers.map(memberId => {
+                  const member = members.find(m => m.id === memberId);
+                  return member ? (
+                    <div key={memberId} className="flex items-center bg-bunganut-sage/20 text-bunganut-sage px-3 py-1 rounded-full">
+                      <span className="text-sm">
+                        {member.first_name} {member.family_name}
+                        {member.is_guest && <span className="text-xs ml-1">(Guest)</span>}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMember(memberId)}
+                        className="ml-2 text-bunganut-sage hover:text-bunganut-sage/70 text-sm"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : null;
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Search Interface */}
+          <div className="relative search-container">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowSearchResults(e.target.value.trim().length > 0);
+              }}
+              onFocus={() => setShowSearchResults(searchQuery.trim().length > 0)}
+              placeholder="Search for family members or guests..."
+              className="input-field w-full"
+            />
+            
+            {/* Search Results Dropdown */}
+            {showSearchResults && (searchResults.length > 0 || searchQuery.trim()) && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {/* Existing Members */}
+                {searchResults.map(member => (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => handleAddMemberFromSearch(member.id)}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 border-b border-gray-100 last:border-b-0"
+                  >
+                    <div className="font-medium">{member.first_name} {member.family_name}</div>
+                    <div className="text-sm text-gray-500">
+                      {member.is_guest ? 'Guest' : 'Family Member'}
+                      {member.food_preferences && ` • ${member.food_preferences}`}
+                    </div>
+                  </button>
+                ))}
+                
+                {/* Quick Add Option */}
+                {searchQuery.trim() && searchResults.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={handleQuickAddGuest}
+                    className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 text-blue-600"
+                  >
+                    <div className="font-medium">Add "{searchQuery}" as new guest</div>
+                    <div className="text-sm text-blue-500">Create new guest profile</div>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-          <button 
-            type="button" 
-            onClick={() => setShowNewMemberForm(true)}
-            className="btn-outline btn-small"
-          >
-            + Add New Guest
-          </button>
+
+          {/* Manual Add Guest Button */}
+          <div className="mt-3">
+            <button 
+              type="button" 
+              onClick={() => setShowNewMemberForm(true)}
+              className="btn-outline btn-small"
+            >
+              + Add New Guest Manually
+            </button>
+          </div>
         </div>
 
         {/* Add New Guest Form */}

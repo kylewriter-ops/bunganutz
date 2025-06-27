@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ROOMS, Stay, Bed, Room } from './models';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import { ROOMS, Stay, Bed, Room, BedType, RoomName } from './models';
 import { supabase } from './supabaseClient';
 
 // Helper: for each bed, how many people are assigned?
@@ -7,7 +9,7 @@ function getBedOccupancy(bed: Bed, assignments: { [key: string]: string }) {
   const capacity = bed.capacity || 1;
   let count = 0;
   for (let i = 0; i < capacity; i++) {
-    const key = `${bed.id}-${i}`;
+    const key = `${bed.id}|${i}`;
     if (assignments[key] && assignments[key] !== 'available') count++;
   }
   return count;
@@ -52,13 +54,17 @@ interface BedPickerProps {
   selectedDate: Date;
   stays: Stay[];
   members: any[];
+  onDateChange?: (date: Date) => void;
 }
 
-const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) => {
+const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members, onDateChange }) => {
   const [assignments, setAssignments] = useState<BedAssignment>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedRoom, setExpandedRoom] = useState<string | null>(null);
+  const [yardSpaces, setYardSpaces] = useState<number>(0);
+  const [newYardSpaces, setNewYardSpaces] = useState<string>('');
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
 
   // Get people for the selected date
   const { members: peopleForDate, guests } = getPeopleForDate(selectedDate, stays, members);
@@ -83,32 +89,54 @@ const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) =
         const { data, error } = await supabase
           .from('bed_assignments')
           .select('*')
-          .eq('stay_id', currentStayId);
+          .eq('stay_id', currentStayId)
+          .eq('date', selectedDate.toISOString().split('T')[0]);
 
         if (error) {
           console.error('Database error:', error);
           throw error;
         }
 
-        const newAssignments: BedAssignment = {};
-        data?.forEach((assignment: any) => {
-          // Use bed_name as the key since it should be unique per bed
-          newAssignments[assignment.bed_name] = assignment.member_id;
-        });
+        console.log('Raw database data:', data);
+        console.log('Database fields available:', data && data.length > 0 ? Object.keys(data[0]) : 'No data');
 
-        // Initialize all bed slots as available
+        const newAssignments: BedAssignment = {};
+        
+        // Initialize all bed slots as available first
         ROOMS.forEach(room => {
           room.beds.forEach(bed => {
             const capacity = bed.capacity || 1;
             for (let i = 0; i < capacity; i++) {
               const key = `${bed.id}|${i}`;
-              if (!newAssignments[key]) {
-                newAssignments[key] = 'available';
-              }
+              newAssignments[key] = 'available';
             }
           });
         });
 
+        // Now overlay the actual assignments from database
+        data?.forEach((assignment: any) => {
+          const bedId = assignment.bed_name;
+          const bedSlot = assignment.bed_slot || 0;
+          const key = `${bedId}|${bedSlot}`;
+          newAssignments[key] = assignment.member_id;
+        });
+
+        // Detect existing yard space assignments and set yardSpaces count
+        const yardSpaceAssignments = data?.filter((assignment: any) => 
+          assignment.bed_name?.startsWith('yard-space-')
+        ) || [];
+        
+        if (yardSpaceAssignments.length > 0) {
+          // Extract the highest space number from existing assignments
+          const spaceNumbers = yardSpaceAssignments.map((assignment: any) => {
+            const match = assignment.bed_name?.match(/yard-space-(\d+)/);
+            return match ? parseInt(match[1]) : 0;
+          });
+          const maxSpaceNumber = Math.max(...spaceNumbers);
+          setYardSpaces(maxSpaceNumber);
+        }
+
+        console.log('Loaded assignments:', newAssignments);
         setAssignments(newAssignments);
       } catch (err: any) {
         console.error('Full error details:', err);
@@ -119,7 +147,7 @@ const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) =
     }
 
     loadAssignments();
-  }, [currentStayId]);
+  }, [currentStayId, selectedDate]);
 
   async function saveAssignment(bedSlot: string, personId: string) {
     if (!currentStayId) return;
@@ -127,8 +155,9 @@ const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) =
     setLoading(true);
     setError(null);
     try {
-      // Parse the bedSlot to get bed ID
-      const [bedId] = bedSlot.split('|');
+      // Parse the bedSlot to get bed ID and slot number
+      const [bedId, slotIndex] = bedSlot.split('|');
+      const bedSlotNumber = parseInt(slotIndex) || 0;
       
       // Find the bed and room information
       let bedInfo: Bed | null = null;
@@ -146,6 +175,28 @@ const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) =
       if (!bedInfo || !roomInfo) {
         throw new Error('Bed not found');
       }
+
+      // If setting to available, delete the assignment
+      if (personId === 'available') {
+        const { error: deleteError } = await supabase
+          .from('bed_assignments')
+          .delete()
+          .eq('stay_id', currentStayId)
+          .eq('date', selectedDate.toISOString().split('T')[0])
+          .eq('bed_name', bedId)
+          .eq('bed_slot', bedSlotNumber);
+
+        if (deleteError) {
+          console.error('Delete error:', deleteError);
+          throw deleteError;
+        }
+
+        setAssignments(prev => ({
+          ...prev,
+          [bedSlot]: 'available'
+        }));
+        return;
+      }
       
       // Check if this person is already assigned to another bed
       const existingAssignment = Object.entries(assignments).find(
@@ -153,14 +204,17 @@ const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) =
       );
 
       if (existingAssignment) {
-        const [existingBedId] = existingAssignment[0].split('|');
+        const [existingBedId, existingSlotIndex] = existingAssignment[0].split('|');
+        const existingBedSlotNumber = parseInt(existingSlotIndex) || 0;
         
         // Remove the existing assignment
         const { error: deleteError } = await supabase
           .from('bed_assignments')
           .delete()
           .eq('stay_id', currentStayId)
-          .eq('bed_name', existingBedId);
+          .eq('date', selectedDate.toISOString().split('T')[0])
+          .eq('bed_name', existingBedId)
+          .eq('bed_slot', existingBedSlotNumber);
 
         if (deleteError) {
           console.error('Delete error:', deleteError);
@@ -173,9 +227,12 @@ const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) =
         stay_id: currentStayId,
         room_name: roomInfo.name,
         bed_name: bedId,
-        member_id: personId
+        member_id: personId,
+        date: selectedDate.toISOString().split('T')[0],
+        bed_slot: bedSlotNumber
       };
       
+      console.log('Saving assignment:', assignmentData);
       const { error } = await supabase
         .from('bed_assignments')
         .upsert(assignmentData);
@@ -205,10 +262,55 @@ const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) =
   // List of people who still need a bed
   const unassignedPeople = people.filter((p) => !assignedPersonIds.includes(p.id));
 
+  // Function to get dynamic rooms (including yard with dynamic beds)
+  const getDynamicRooms = useMemo(() => {
+    const dynamicRooms = [...ROOMS];
+    
+    // Find the Yard room and add dynamic beds
+    const yardRoom = dynamicRooms.find(room => room.name === 'Yard');
+    if (yardRoom) {
+      yardRoom.beds = Array.from({ length: yardSpaces }, (_, i) => ({
+        id: `yard-space-${i + 1}`,
+        description: `Personal space ${i + 1} (tent/camper)`,
+        type: 'personal-tent' as BedType,
+        room: 'Yard' as RoomName,
+        capacity: 1 // Changed from 4 to 1 - each personal space is one bed
+      }));
+    }
+    
+    return dynamicRooms;
+  }, [yardSpaces]);
+
   // Total open beds across all rooms
   const totalOpenBeds = useMemo(() => {
-    return ROOMS.reduce((sum, room) => sum + getRoomOpenBeds(room, assignments), 0);
-  }, [assignments]);
+    return getDynamicRooms.reduce((sum, room) => sum + getRoomOpenBeds(room, assignments), 0);
+  }, [assignments, getDynamicRooms]);
+
+  // Function to add yard spaces
+  const addYardSpaces = () => {
+    const spaces = parseInt(newYardSpaces);
+    if (spaces > 0) {
+      setYardSpaces(prev => prev + spaces);
+      setNewYardSpaces('');
+    }
+  };
+
+  // Function to remove yard spaces
+  const removeYardSpace = () => {
+    if (yardSpaces > 0) {
+      // Remove the last personal space
+      const lastSpaceId = `yard-space-${yardSpaces}`;
+      
+      // Clear any assignments to this space
+      setAssignments(prev => {
+        const newAssignments = { ...prev };
+        delete newAssignments[`${lastSpaceId}|0`];
+        return newAssignments;
+      });
+      
+      setYardSpaces(prev => prev - 1);
+    }
+  };
 
   // For each bed, allow assignment up to its capacity
   function renderBedDropdowns(bed: Bed) {
@@ -219,10 +321,13 @@ const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) =
     
     for (let i = 0; i < capacity; i++) {
       const key = `${bed.id}|${i}`;
+      const currentValue = assignments[key] || 'available';
+      console.log(`Bed slot ${key} current value:`, currentValue);
+      
       dropdowns.push(
         <select
           key={key}
-          value={assignments[key] || 'available'}
+          value={currentValue}
           onChange={e => saveAssignment(key, e.target.value)}
           className="select-field"
           disabled={loading}
@@ -257,44 +362,64 @@ const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) =
   function renderAssignmentSummary() {
     return (
       <div className="bg-gradient-card p-6 rounded-lg border border-bunganut-sage/30">
-        <h3 className="text-heading-3 mb-4">Bed Assignment Summary</h3>
-        <div className="space-y-4">
-          {ROOMS.map(room => {
-            // For each bed in the room, list assigned people
-            const bedAssignments: string[] = [];
-            room.beds.forEach(bed => {
-              const capacity = bed.capacity || 1;
-              for (let i = 0; i < capacity; i++) {
-                const key = `${bed.id}|${i}`;
-                const personId = assignments[key];
-                let label = 'Available';
-                if (personId && personId !== 'available') {
-                  const person = people.find(p => p.id === personId);
-                  if (person) {
-                    const displayName = person.first_name || person.name || `Person ${person.id}`;
-                    const fullName = person.family_name ? 
-                      `${displayName} ${person.family_name}` : 
-                      displayName;
-                    label = fullName;
-                  } else {
-                    label = 'Unknown';
-                  }
-                }
-                bedAssignments.push(`${bed.description}: ${label}`);
-              }
-            });
-            return (
-              <div key={room.name} className="card">
-                <h4 className="text-subheading font-medium mb-2">{room.name}</h4>
-                <ul className="space-y-1">
-                  {bedAssignments.map((ba, i) => (
-                    <li key={i} className="text-caption">{ba}</li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
+        <div 
+          className="flex justify-between items-center cursor-pointer mb-4"
+          onClick={() => setSummaryExpanded(!summaryExpanded)}
+        >
+          <h3 className="text-heading-3">Bed Assignment Summary</h3>
+          <div className="flex items-center space-x-2">
+            <span className="text-caption">
+              {summaryExpanded ? 'Collapse' : 'Expand'}
+            </span>
+            <svg 
+              className={`w-5 h-5 text-gray-500 transition-transform ${summaryExpanded ? 'rotate-180' : ''}`}
+              fill="currentColor" 
+              viewBox="0 0 20 20"
+            >
+              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </div>
         </div>
+        
+        {summaryExpanded && (
+          <div className="space-y-4">
+            {getDynamicRooms.map(room => {
+              // For each bed in the room, list assigned people
+              const bedAssignments: string[] = [];
+              room.beds.forEach(bed => {
+                const capacity = bed.capacity || 1;
+                for (let i = 0; i < capacity; i++) {
+                  const key = `${bed.id}|${i}`;
+                  const personId = assignments[key];
+                  let label = 'Available';
+                  if (personId && personId !== 'available') {
+                    const person = people.find(p => p.id === personId);
+                    if (person) {
+                      const displayName = person.first_name || person.name || `Person ${person.id}`;
+                      const fullName = person.family_name ? 
+                        `${displayName} ${person.family_name}` : 
+                        displayName;
+                      label = fullName;
+                    } else {
+                      label = 'Unknown';
+                    }
+                  }
+                  bedAssignments.push(`${bed.description}: ${label}`);
+                }
+              });
+              return (
+                <div key={room.name} className="card">
+                  <h4 className="text-subheading font-medium mb-2">{room.name}</h4>
+                  <ul className="space-y-1">
+                    {bedAssignments.map((ba, i) => (
+                      <li key={i} className="text-caption">{ba}</li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        )}
         {error && <div className="text-red-500 mt-4">{error}</div>}
       </div>
     );
@@ -312,10 +437,15 @@ const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) =
     <div className="section-spacing">
       {/* Header Info */}
       <div className="card">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-          <div>
-            <div className="text-heading-2">{selectedDate.toLocaleDateString()}</div>
-            <div className="text-caption">Selected Date</div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+          <div className="md:col-span-2">
+            <label className="block text-caption font-medium mb-2">Select Date for Bed Assignments</label>
+            <DatePicker
+              selected={selectedDate}
+              onChange={(date: Date | null) => date && onDateChange?.(date)}
+              className="input-field w-full"
+              dateFormat="MMM dd, yyyy"
+            />
           </div>
           <div>
             <div className="text-heading-2 text-bunganut-sage">{totalOpenBeds}</div>
@@ -357,7 +487,7 @@ const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) =
 
       {/* Room Selection */}
       <div className="space-y-4">
-        {ROOMS.map(room => (
+        {getDynamicRooms.map(room => (
           <div key={room.name} className="card overflow-hidden">
             <div
               className="cursor-pointer p-6 hover:bg-gray-50 transition-colors border-b border-gray-100"
@@ -385,6 +515,54 @@ const BedPicker: React.FC<BedPickerProps> = ({ selectedDate, stays, members }) =
             
             {expandedRoom === room.name && (
               <div className="p-6 bg-gray-50">
+                {room.name === 'Yard' && (
+                  <div className="p-4 bg-blue-50 border-l-4 border-blue-400 mb-4">
+                    <p className="text-sm text-blue-800 mb-3">
+                      If you're bringing your own tent or camper, add as many spaces as you need and assign them.
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={newYardSpaces}
+                        onChange={(e) => setNewYardSpaces(e.target.value)}
+                        placeholder="Number of spaces"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+                        onKeyPress={(e) => e.key === 'Enter' && addYardSpaces()}
+                      />
+                      <button
+                        onClick={addYardSpaces}
+                        className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {yardSpaces > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-blue-600 font-medium">
+                          Current personal spaces:
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {Array.from({ length: yardSpaces }, (_, i) => (
+                            <div key={i} className="flex items-center justify-between p-2 bg-white rounded border">
+                              <span className="text-sm">Personal space {i + 1}</span>
+                              {i === yardSpaces - 1 && (
+                                <button
+                                  onClick={removeYardSpace}
+                                  className="text-red-500 hover:text-red-700 text-sm px-2 py-1 rounded"
+                                  title="Remove this space"
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-4">
                   {room.beds.map(bed => (
                     <div key={bed.id} className="card">
